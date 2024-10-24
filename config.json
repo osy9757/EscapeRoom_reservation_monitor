@@ -1,0 +1,22 @@
+[
+  {
+    "url": "https://www.roomlescape.com/",
+    "click_center": true,
+    "actions": [
+      { "type": "click", "text": "홍대1호점", "ul_data_view": null, "disabled_class": null },
+      { "type": "click", "text": "[홍대1호점]퇴근길", "ul_data_view": null, "disabled_class": null },
+      { "type": "click", "text": "29", "ul_data_view": "days", "disabled_class": "disabled" },
+      { "type": "check_time", "ul_id": "themeTimeList", "disabled_class": "impossible" }
+    ]
+  },
+  {
+    "url": "https://www.roomlescape.com/",
+    "click_center": false,
+    "actions": [
+      { "type": "click", "text": "홍대1호점", "ul_data_view": null, "disabled_class": null },
+      { "type": "click", "text": "[홍대1호점]퇴근길", "ul_data_view": null, "disabled_class": null },
+      { "type": "click", "text": "29", "ul_data_view": "days", "disabled_class": "disabled" },
+      { "type": "check_time", "ul_id": "themeTimeList", "disabled_class": "impossible" }
+    ]
+  }
+]
