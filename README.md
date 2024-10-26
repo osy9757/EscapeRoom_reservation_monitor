@@ -35,22 +35,6 @@
      SLACK_TEST_CHANNEL=your-test-channel
      SLACK_ESCAPEROOM_CHANNEL=your-escape-room-channel
      ```
-
-## 사용법
-
-1. **FastAPI 서버 실행**
-   ```bash
-   uvicorn main:app --reload
-   ```
-
-2. **Slack 명령어 사용**
-   - `/checkbooking`: 예약 가능 시간을 확인하고 결과를 Slack에 전송합니다.
-   - `/addlist`: 방탈출명과 날짜를 신청 리스트에 추가합니다.
-   - `/hello`: 간단한 인사말을 전송합니다.
-
-3. **스케줄러 실행**
-   - 스케줄러는 `scheduler_tasks.py`에서 정의된 작업을 주기적으로 실행합니다. 예약 가능 시간을 3분마다 확인하고, 매일 00시 1분에 설정 파일을 업데이트합니다.
-
 ## 파일 설명
 
 - `main.py`: FastAPI 서버와 Slack 명령어를 처리하는 메인 파일입니다.
@@ -68,3 +52,22 @@
 - `availability.json`: 현재 예약 가능 상태를 저장하는 파일입니다.
 - `listup.json`: 예약 모니터링을 위한 추가적인 설정을 포함할 수 있는 파일입니다.
 - `addlist.json`: Slack 명령어를 통해 추가된 예약 요청을 저장하는 파일입니다.
+
+
+## 사용법
+
+1. **FastAPI 서버 실행**
+   ```bash
+   uvicorn main:app --reload
+   ```
+
+2. **Slack 명령어 사용**
+   - `/checkbooking`: 예약 가능 시간을 확인하고 결과를 Slack에 전송합니다.
+   - `/addlist`: 방탈출명과 날짜를 신청 리스트에 추가합니다.
+   - `/hello`: 간단한 인사말을 전송합니다.
+
+3. **스케줄러 실행**
+   - 스케줄러는 `scheduler_tasks.py`에서 정의된 작업을 주기적으로 실행합니다. 예약 가능 시간을 3분마다 확인하고, 매일 00시 1분에 설정 파일을 업데이트합니다.
+
+4. **서버 실행**
+   - Slack api와 연결하여 사용하기 위해선 배포 혹은 포트포워딩등을 진행해야 합니다. 테스트시에는 ngrok과 fly.io로 진행했습니다.
