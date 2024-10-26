@@ -88,4 +88,8 @@ pip-selfcheck.json
 #fly.io
 *.toml
 
+#test
+test*
+*.json
+
 # End of https://www.toptal.com/developers/gitignore/api/git,macos,visualstudiocode,dotenv

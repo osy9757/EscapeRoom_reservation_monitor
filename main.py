@@ -1,96 +1,75 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
-import time
+from fastapi import FastAPI, Request
+from slack_bolt import App as SlackApp
+from slack_bolt.adapter.fastapi import SlackRequestHandler
+from slack_messenger import SlackMessenger
+from booking_checker import BookingChecker
+from models import SiteConfig
+import json
 import os
 from dotenv import load_dotenv
+from config_utils import load_config
+from json_utils import append_to_json_file
+from scheduler_tasks import start_scheduler, send_test_message, check_and_save_availability
+import threading
 
 # .env 파일 로드
 load_dotenv()
 
 app = FastAPI()
 
-class Action(BaseModel):
-    type: str
-    text: Optional[str] = None
-    ul_data_view: Optional[str] = None
-    disabled_class: Optional[str] = None
-    ul_id: Optional[str] = None
+# Slack Bolt 앱 초기화
+slack_app = SlackApp(token=os.getenv("BOT_USER_OAUTH_TOKEN"), signing_secret=os.getenv("SLACK_SIGNING_SECRET"))
+slack_handler = SlackRequestHandler(slack_app)
 
-class SiteConfig(BaseModel):
-    url: str
-    click_center: bool
-    actions: List[Action]
+# 스케줄러를 별도의 스레드에서 시작
+scheduler_thread = threading.Thread(target=start_scheduler)
+scheduler_thread.start()
 
-class BookingChecker:
-    def __init__(self, config: SiteConfig):
-        self.config = config
-        self.driver = webdriver.Chrome()
-        self.slack_client = WebClient(token=os.getenv("BOT_USER_OAUTH_TOKEN"))
-        self.slack_channel = os.getenv("SLACK_CHANNEL")
+@slack_app.command("/checkbooking")
+def check_booking_command(ack, body, client):
+    ack("Booking check started. We will notify you once the results are ready.")
+    configs = load_config()
 
-    def click_element_by_text(self, text, ul_data_view=None, disabled_class=None):
-        xpath = f"//*[contains(text(), '{text}')]"
-        if ul_data_view:
-            xpath = f"//ul[@data-view='{ul_data_view}']//li[not(contains(@class, '{disabled_class}')) and contains(text(), '{text}')]"
-        
-        try:
-            element = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, xpath))
-            )
-            self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
-            element.click()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error clicking text '{text}': {e}")
+    slack_messenger = SlackMessenger(
+        token=os.getenv("BOT_USER_OAUTH_TOKEN"),
+        channel=os.getenv("SLACK_ESCAPEROOM_CHANNEL")
+    )
 
-    def check_booking(self):
-        url = self.config.url
-        click_center = self.config.click_center
-        actions = self.config.actions
+    messages = []
+    for config in configs:
+        checker = BookingChecker(config)
+        available_times = checker.check_booking()
+    
+        if available_times:
+            messages.append(f"{config.title} ({config.date}): {', '.join(available_times)}")
+        else:
+            messages.append(f"{config.title} ({config.date}): 예약 가능한 시간대가 없습니다.")
 
-        try:
-            self.driver.get(url)
+    # 모든 지점의 예약 가능 시간을 한 번에 전송
+    full_message = "\n".join(messages)
+    slack_messenger.send_message(full_message)
 
-            if click_center:
-                WebDriverWait(self.driver, 10).until(
-                    EC.element_to_be_clickable((By.TAG_NAME, "body"))
-                ).click()
-                time.sleep(3)
+@slack_app.command("/addlist")
+def add_list_command(ack, body, client):
+    text = body.get('text', '').strip()
+    user_id = body["user_id"]
 
-            for action in actions:
-                if action.type == 'click':
-                    self.click_element_by_text(action.text, action.ul_data_view, action.disabled_class)
-                elif action.type == 'check_time':
-                    time_slots = WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_all_elements_located((By.XPATH, f"//ul[@id='{action.ul_id}']//li[not(contains(@class, '{action.disabled_class}'))]"))
-                    )
-                    return [slot.text for slot in time_slots]
+    # 인자를 json에 저장합니다.
+    if text:
+        data = {"user_id" : user_id, "entry" : text}
+        append_to_json_file(data, 'addlist.json')
+    
+        ack(f"'{text}'가 신청 리스트에 저장되었습니다.")
+    else:
+        ack(f"알람에 추가 할 방탈출명과 날짜를 입력해주세요.")
 
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error processing site {url}: {e}")
-        finally:
-            self.driver.quit()
+# Slack 명령어 처리
+@slack_app.command("/hello")
+def hello_command(ack, body):
+    user_id = body["user_id"]
+    ack(f"Hi, <@{user_id}>!")
 
-    def send_slack_message(self, message):
-        try:
-            response = self.slack_client.chat_postMessage(
-                channel=self.slack_channel,
-                text=message
-            )
-        except SlackApiError as e:
-            raise HTTPException(status_code=500, detail=f"Slack API Error: {e.response['error']}")
-
-@app.post("/check-booking/")
-async def check_booking(config: SiteConfig):
-    checker = BookingChecker(config)
-    available_times = checker.check_booking()
-    if available_times:
-        message = f"Available booking times for {config.url}: {', '.join(available_times)}"
-        checker.send_slack_message(message)
-    return {"available_times": available_times}
+# FastAPI와 Slack Bolt 통합
+@app.post("/slack/events")
+async def slack_events(req: Request):
+    return await slack_handler.handle(req)
